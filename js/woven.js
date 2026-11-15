@@ -23,6 +23,8 @@ function createWovenEngine(env, S, geo) {
   const clamp = (v) => Math.max(0, Math.min(1, v));
   const painted = (x, y) => { const gx = (x / PG) | 0, gy = (y / PG) | 0; return gx >= 0 && gy >= 0 && gx < pw && gy < ph && paint[gy * pw + gx] === 1; };
   const agar = (x, y) => geo.inside(x, y) || painted(x, y);
+  const OG = S.structure === "outgrowth";   // letters packed with mycelium that grows out of them, thinning
+  let ogSpawned = 0, ogMax = 0, lastOg = 0;
   const counter = (x, y) => (S.counters ?? true) && geo.inCounter(x, y) && !painted(x, y);
 
   function addNode(x, y, parent, tipId) {
@@ -62,6 +64,12 @@ function createWovenEngine(env, S, geo) {
     };
     const w = [r.crowd >= 6 ? "dense" : r.crowd <= 3 ? "airy" : "even", r.wander > 0.22 ? "wandering" : r.wander < 0.1 ? "straight" : "curving",
       r.branch > 0.05 ? "bushy" : r.branch < 0.025 ? "sparse" : "branching", r.escape === 0 ? "bound" : r.reachOut > 24 ? "far-reaching" : r.reachOut > 14 ? "spilling" : "fraying"];
+    if (OG) {
+      r.escape = 0; r.crowd = Math.round(5 + 7 * dens);
+      r.reachSteps = (geo.fontPx * (0.08 + 0.9 * j(S.reach ?? 0.5))) / STEP;
+      r.taper = S.taper ?? 0.5;
+      w[3] = r.reachSteps * STEP > geo.fontPx * 0.6 ? "far-reaching" : "outgrowing";
+    }
     if (r.spots >= 5) w.push("corded");
     r.label = "#" + Math.floor(1000 + Math.random() * 9000) + " · " + w.join(", ");
     return r;
@@ -76,6 +84,7 @@ function createWovenEngine(env, S, geo) {
     const stride = Math.max(1, Math.round((STEP * 3) / geo.cell));
     coverPts = [];
     for (const L of geo.letters) for (const c of L.cells) if (((c.x / geo.cell) | 0) % stride === 0 && ((c.y / geo.cell) | 0) % stride === 0) coverPts.push({ x: c.x, y: c.y });
+    if (OG) { let edge = 0; for (const L of geo.letters) for (const c of L.cells) if (c.depth === 0) edge++; ogMax = Math.round(edge * (geo.cell / STEP) * (0.12 + 0.3 * R.density)); }
     for (let k = 0; k < R.spots && geo.letters.length; k++) { const [x, y] = randomInside(p.random(geo.letters)); spots.push({ x, y, r: geo.fontPx * p.random(0.03, 0.07), amount: 1, found: false, contacts: [] }); }
     later = geo.letters.map((L) => { const [x, y] = randomInside(L); return { at: p.random(0, R.stagger), x, y }; });
     for (let k = 0; k < R.sporesExtra && geo.letters.length; k++) { const [x, y] = randomInside(p.random(geo.letters)); later.push({ at: p.random(2, 12), x, y }); }
@@ -92,7 +101,7 @@ function createWovenEngine(env, S, geo) {
     if (!coverPts.length || nodes.length >= MAX_NODES) return;
     const r = STEP * (3.4 - 1.2 * R.density), sample = force ? coverPts : Array.from({ length: Math.min(500, coverPts.length) }, () => coverPts[(Math.random() * coverPts.length) | 0]);
     const empty = sample.filter((c) => { let hit = false; near(c.x, c.y, r, (n) => { if (!hit && !n.dead && Math.hypot(n.x - c.x, n.y - c.y) < r) hit = true; }); return !hit; });
-    const target = 0.08 - 0.075 * R.density;   // denser setting = fewer gaps allowed
+    const target = OG ? 0.03 - 0.027 * R.density : 0.08 - 0.075 * R.density;   // denser setting = fewer gaps allowed
     if (!force && empty.length / sample.length < target) { fillDone = true; return; }
     fillDone = false;
     p.shuffle(empty, true);
@@ -120,7 +129,7 @@ function createWovenEngine(env, S, geo) {
       while (tp.carry >= STEP && keep) {
         tp.carry -= STEP;
         const { x, y } = tp.node;
-        let a = tp.ang + p.random(-R.wander, R.wander);
+        let a = tp.ang + hyphaTurn(tp, R.wander);
         // a thread sent to fill a gap heads for it
         if (tp.target) {
           const d = Math.hypot(tp.target.x - x, tp.target.y - y);
@@ -136,8 +145,14 @@ function createWovenEngine(env, S, geo) {
         near(x, y, STEP * 5, (n) => { if (n.tipId === tp.id || n.dead) return; const dx = x - n.x, dy = y - n.y, d = Math.hypot(dx, dy) || 1; rx += dx / d / d; ry += dy / d / d; });
         if (rx || ry) { let da = Math.atan2(ry, rx) - a; da = Math.atan2(Math.sin(da), Math.cos(da)); a += da * Math.min(tp.target ? 0.12 : 0.25, Math.hypot(rx, ry) * STEP * 1.5); }
         let nx = x + Math.cos(a) * STEP, ny = y + Math.sin(a) * STEP;
+        // outgrowth: threads leaving the letter keep going, thinning, until they run out of reach
+        if (tp.og) {
+          if (counter(nx, ny)) { keep = false; break; }
+          if (!geo.inside(nx, ny)) tp.out++;
+          if (tp.out > tp.reach) { keep = false; break; }
+        }
         // the edge of the agar: usually turn back along it; sometimes break out (Spill decides)
-        if (!agar(nx, ny)) {
+        else if (!agar(nx, ny)) {
           if (R.escape > 0 && tp.out < R.reachOut && !counter(nx, ny) && (tp.out > 0 || p.random() < R.escape)) { if (tp.out === 0) tp.exit = a; tp.out++; }
           else {
             let found = false;
@@ -150,25 +165,30 @@ function createWovenEngine(env, S, geo) {
           }
         } else tp.out = 0;
         // off the agar a thread is hungry: the further it goes, the more it curls back
-        if (tp.out > 0 && tp.exit !== undefined) { let da = tp.exit + Math.PI - a; da = Math.atan2(Math.sin(da), Math.cos(da)); a += da * Math.min(0.3, (tp.out / R.reachOut) * 0.3); }
+        if (!tp.og && tp.out > 0 && tp.exit !== undefined) { let da = tp.exit + Math.PI - a; da = Math.atan2(Math.sin(da), Math.cos(da)); a += da * Math.min(0.3, (tp.out / R.reachOut) * 0.3); }
         tp.ang = a;
         if (nx < 3 || ny < 3 || nx > env.W - 3 || ny > env.H - 3 || nodes.length >= MAX_NODES) { keep = false; break; }
         // fuse with threads it meets (once it has grown away from where it started)
         let fuse = null;
-        if (tp.len > STEP * 10 && !tp.target) near(nx, ny, STEP * 1.25, (n) => { if (!fuse && !n.dead && n.tipId !== tp.id && n !== tp.node && n !== tp.node.parent && Math.abs(env.t - n.born) > 1.5) fuse = n; });
+        if (tp.len > STEP * 10 && !tp.target && !(tp.og && tp.out < 4)) near(nx, ny, STEP * 1.25, (n) => { if (!fuse && !n.dead && n.tipId !== tp.id && n !== tp.node && n !== tp.node.parent && Math.abs(env.t - n.born) > 1.5) fuse = n; });
         if (fuse) { adj[tp.node.id].push(fuse.id); adj[fuse.id].push(tp.node.id); fusions.push([tp.node, fuse]); if (p.random() < 0.75) { keep = false; break; } }
         // ground already taken: stop (outside the letter is poor ground, so threads there stay sparse)
         let crowd = 0;
         near(nx, ny, STEP * 2.7, (n) => { if (!n.dead && n.tipId !== tp.id) crowd++; });
-        if (!tp.target && crowd > (tp.out > 0 ? Math.max(2, R.crowd - 2) : R.crowd) && tp.len > STEP * 6) { keep = false; break; }
+        const lim = tp.og ? (tp.out < 3 ? 99 : 2) : tp.out > 0 ? Math.max(2, R.crowd - 2) : R.crowd;
+        if (!tp.target && crowd > lim && tp.len > STEP * 6) { keep = false; break; }
         const n = addNode(nx, ny, tp.node, tp.id);
-        n.out = tp.out; n.exit = tp.exit;
+        n.out = tp.out; n.exit = tp.exit; n.og = tp.og;
         tp.node = n; tp.len += STEP;
         for (const f of spots) if (f.amount > 0.05 && Math.hypot(f.x - nx, f.y - ny) < f.r) {
           f.contacts.push(n);
           if (!f.found) { f.found = true; for (let k = 0; k < 3; k++) born.push(newTip(n, p.random(Math.PI * 2), tp.max)); }
         }
-        if (tips.length + born.length < 360 && p.random() < R.branch * (tp.out > 0 ? 0.3 : 1)) born.push(newTip(n, a + (p.random() < 0.5 ? -1 : 1) * p.random(0.45, 1.1), (tp.target ? geo.fontPx * 0.3 : tp.max) * p.random(0.5, 0.95)));
+        if (tips.length + born.length < 360 && p.random() < R.branch * (tp.og ? 1.4 : tp.out > 0 ? 0.3 : 1)) {
+          const c = newTip(n, a + (p.random() < 0.5 ? -1 : 1) * p.random(tp.og ? 0.3 : 0.45, tp.og ? 0.8 : 1.1), (tp.target ? geo.fontPx * 0.3 : tp.max) * p.random(0.5, 0.95));
+          if (tp.og) { c.og = true; c.reach = tp.reach; c.max = 1e9; }
+          born.push(c);
+        }
         if (tp.len > tp.max) { keep = false; break; }
       }
       if (keep) alive.push(tp);
@@ -178,7 +198,7 @@ function createWovenEngine(env, S, geo) {
     if (tips.length < 60 && nodes.length < MAX_NODES && !fillDone) {
       const young = [];
       for (let k = nodes.length - 1; k >= 0 && young.length < 300; k -= 3) {
-        const n = nodes[k]; if (n.dead || (n.out > 0 && p.random() < 0.92) || (n.out || 0) >= R.reachOut) continue;
+        const n = nodes[k]; if (n.dead || n.og || (n.out > 0 && p.random() < 0.92) || (n.out || 0) >= R.reachOut) continue;
         let c = 0; near(n.x, n.y, STEP * 3, (m) => { if (!m.dead) c++; });
         if (c < R.crowd * 3) young.push(n);
       }
@@ -189,6 +209,21 @@ function createWovenEngine(env, S, geo) {
     }
     // gaps: once the first growth has settled, look for unreached parts of the letters and reach into them
     if (env.t > R.stagger + 3 && env.t - lastFill > 0.8 && tips.length < 80) { lastFill = env.t; fillGaps(false); }
+    // outgrowth: from the letter's edge, threads grow outward (normal to the outline, spreading as they go)
+    if (OG && env.t > R.stagger + 2 && env.t - lastOg > 0.3 && ogSpawned < ogMax && nodes.length < MAX_NODES) {
+      lastOg = env.t;
+      let made = 0;
+      for (let k = 0; k < 80 && made < 4 + 10 * R.density; k++) {
+        const n = nodes[(Math.random() * nodes.length) | 0];
+        if (!n || n.dead || n.og || !geo.inside(n.x, n.y)) continue;
+        let ox = 0, oy = 0;
+        for (let d = 0; d < 12; d++) { const a = (d / 12) * 6.283, cx = Math.cos(a), cy = Math.sin(a); if (!geo.inside(n.x + cx * STEP * 3, n.y + cy * STEP * 3) && !counter(n.x + cx * STEP * 3, n.y + cy * STEP * 3)) { ox += cx; oy += cy; } }
+        if (!ox && !oy) continue;
+        const t = newTip(n, Math.atan2(oy, ox) + p.random(-0.45, 0.45), 1e9);
+        t.og = true; t.out = 0; t.reach = R.reachSteps * p.random(0.3, 1.1);
+        tips.push(t); made++; ogSpawned++;
+      }
+    }
   }
   function transport() {
     for (const n of nodes) n.flow = 0;
@@ -197,7 +232,9 @@ function createWovenEngine(env, S, geo) {
       for (const c of f.contacts.slice(-5)) { let n = c; while (n) { n.flow += f.amount; n.lastFlow = env.t; n = n.parent; } }
       f.amount = Math.max(0, f.amount - 0.003);
     }
-    for (const n of nodes) if (!n.root && !n.dead && n.flow === 0 && env.t - Math.max(n.born, n.lastFlow) > R.dieback && !agar(n.x, n.y)) n.dead = env.t;
+    const kids = new Int32Array(nodes.length);
+    for (const n of nodes) if (!n.dead && n.parent) kids[n.parent.id]++;
+    for (let i = nodes.length - 1; i >= 0; i--) { const n = nodes[i]; if (!n.root && !n.dead && !n.og && !kids[n.id] && n.flow === 0 && env.t - Math.max(n.born, n.lastFlow) > R.dieback && !agar(n.x, n.y)) { n.dead = env.t; if (n.parent) kids[n.parent.id]--; } }
   }
   function sendWave() {
     let best = null, bd = geo.fontPx * 0.2;
@@ -232,7 +269,7 @@ function createWovenEngine(env, S, geo) {
     },
     pointerUp() { dragFrom = null; },
     command(c) { if (c === "fill") fillGaps(true); if (c === "clearPaint") { paint.fill(0); } },
-    status() { return R.label + (tips.length ? " · growing" : fillDone ? " · filled" : ""); },
+    status() { return R.label + (tips.length ? (OG && ogSpawned ? " · growing out" : " · growing") : fillDone ? " · filled" : ""); },
     render(ctx, screen, ink) {
       ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = ink; ctx.fillStyle = ink;
       if (screen && S.guide) { ctx.globalAlpha = 0.08; geo.drawText(ctx); ctx.globalAlpha = 1; }
@@ -240,6 +277,7 @@ function createWovenEngine(env, S, geo) {
       for (const n of nodes) {
         if (!n.parent) continue;
         let w = base + Math.min(STEP * 2.5, Math.log2(1 + n.flow) * STEP * 0.35 * R.cord);
+        if (OG) w = n.og && n.out > 0 ? base * 1.9 * Math.pow(Math.max(0.1, 1 - n.out / R.reachSteps), 0.6 + 1.6 * R.taper) : base * 2.1;
         if (n.dead) { const k = 1 - (env.t - n.dead) / 6; if (k <= 0) continue; w *= k; }
         const q = Math.round(w * 4) / 4;
         let b = buckets.get(q); if (!b) buckets.set(q, (b = [])); b.push(n);

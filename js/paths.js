@@ -150,7 +150,7 @@ function createPathsEngine(env, S, opts = {}) {
       while (tp.carry >= STEP && keep) {
         tp.carry -= STEP;
         const { x, y } = tp.node;
-        let a = tp.ang + p.random(-R.wander, R.wander);
+        let a = tp.ang + hyphaTurn(tp, R.wander);
         // chemotropism: an aimed thread bends toward its partner food, more firmly as it gets close
         if (tp.target) {
           const g = tp.target, d = Math.hypot(g.x - x, g.y - y);

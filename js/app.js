@@ -2,7 +2,7 @@
 // Tabs, controls, the canvas loop (p5.js, instance mode), pointer input, tracing image and export.
 (() => {
   const $ = (s) => document.querySelector(s);
-  const FONTS = ["Space Grotesk", "Inter", "IBM Plex Sans", "IBM Plex Serif", "Fraunces", "Playfair Display", "Archivo Black", "DM Serif Display", "Syne", "Instrument Serif", "Unbounded", "Bricolage Grotesque"];
+  const FONTS = ["Space Grotesk", "Satoshi", "Inter", "Roboto", "Roboto Condensed", "Roboto Mono", "IBM Plex Sans", "IBM Plex Serif", "Fraunces", "Playfair Display", "Archivo Black", "DM Serif Display", "Syne", "Instrument Serif", "Unbounded", "Bricolage Grotesque"];
   const fontOpts = () => FONTS.map((f) => [f, f]);
   const pct = (v) => Math.round(v * 100) + "%";
   const times = (v) => v.toFixed(1) + "×";
@@ -13,8 +13,8 @@
   const TABS = {
     type: {
       name: "Type",
-      about: "Type a word: mycelium grows through the letters. Woven fills each letter like a lab culture; Roped traces each stroke with twisted cords. Drag on the canvas to grow mycelium into any space.",
-      defaults: { text: "mycelium", font: "Space Grotesk", fontWeight: 700, size: 0.85, structure: "woven", spill: 0.25, density: 0.7, branching: 0.5, wander: 0.4, cords: 0.5, weight: 1, variation: 0.5, counters: true, guide: false, brush: 18, fluff: 0.4, strands: 3, twist: 0.5, explore: 0.5 },
+      about: "Type a word: mycelium grows through the letters. Woven fills each letter like a lab culture; Outgrowth packs the letters dark and grows threads out of them that thin as they go; Roped traces each stroke with cords. Drag on the canvas to grow mycelium into any space.",
+      defaults: { text: "mycelium", font: "Space Grotesk", fontWeight: 700, size: 0.85, structure: "woven", spill: 0.25, density: 0.7, branching: 0.5, wander: 0.35, cords: 0.5, weight: 1, variation: 0.5, counters: true, guide: false, brush: 18, fluff: 0.4, strands: 3, twist: 0.5, explore: 0.5, reach: 0.5, taper: 0.5 },
       controls: [
         { type: "button", label: "Grow again", cmd: "regrow", primary: true, hint: "Same settings, a new random growth" },
         { type: "section", label: "Word" },
@@ -23,9 +23,11 @@
         { type: "select", key: "fontWeight", label: "Font weight", options: [[300, "Light"], [400, "Regular"], [500, "Medium"], [700, "Bold"], [900, "Black"]], regrow: true },
         { type: "range", key: "size", label: "Size", min: 0.3, max: 1, step: 0.01, fmt: pct, regrow: true },
         { type: "section", label: "Growth" },
-        { type: "select", key: "structure", label: "Structure", options: [["woven", "Woven: a culture fills each letter"], ["roped", "Roped: cords trace each stroke"]], regrow: true },
+        { type: "select", key: "structure", label: "Structure", options: [["woven", "Woven: a culture fills each letter"], ["outgrowth", "Outgrowth: grows out of the letters"], ["roped", "Roped: cords trace each stroke"]], regrow: true },
         { type: "range", key: "spill", label: "Spill past the outline", min: 0, max: 1, step: 0.01, fmt: (v) => (v < 0.03 ? "bound" : pct(v)), regrow: true, when: (S) => S.structure === "woven" },
-        { type: "range", key: "density", label: "Density", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true, when: (S) => S.structure === "woven" },
+        { type: "range", key: "density", label: "Density", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true, when: (S) => S.structure !== "roped" },
+        { type: "range", key: "reach", label: "How far it grows out", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true, when: (S) => S.structure === "outgrowth" },
+        { type: "range", key: "taper", label: "Thinning as it grows out", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true, when: (S) => S.structure === "outgrowth" },
         { type: "range", key: "branching", label: "Branching", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true },
         { type: "range", key: "wander", label: "Wander", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true },
         { type: "range", key: "cords", label: "Cords (thick routes)", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true, when: (S) => S.structure === "woven" },
@@ -34,13 +36,13 @@
         { type: "range", key: "twist", label: "Twist", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true, when: (S) => S.structure === "roped" },
         { type: "range", key: "weight", label: "Thread weight", min: 0.4, max: 2.5, step: 0.05, fmt: times },
         { type: "range", key: "variation", label: "Variation between runs", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true },
-        { type: "toggle", key: "counters", label: "Keep counters open (a, o, e…)", regrow: true, when: (S) => S.structure === "woven" },
+        { type: "toggle", key: "counters", label: "Keep counters open (a, o, e…)", regrow: true, when: (S) => S.structure !== "roped" },
         { type: "toggle", key: "guide", label: "Show a faint letter guide" },
-        { type: "section", label: "Paint with mycelium", when: (S) => S.structure === "woven" },
-        { type: "note", text: "Drag on the canvas: the network grows into the area you paint, from its nearest threads.", when: (S) => S.structure === "woven" },
-        { type: "range", key: "brush", label: "Brush size", min: 6, max: 60, step: 1, fmt: (v) => v + " px", when: (S) => S.structure === "woven" },
-        { type: "button", label: "Fill gaps now", cmd: "fill", when: (S) => S.structure === "woven" },
-        { type: "button", label: "Clear painting", cmd: "regrow", when: (S) => S.structure === "woven" },
+        { type: "section", label: "Paint with mycelium", when: (S) => S.structure !== "roped" },
+        { type: "note", text: "Drag on the canvas: the network grows into the area you paint, from its nearest threads.", when: (S) => S.structure !== "roped" },
+        { type: "range", key: "brush", label: "Brush size", min: 6, max: 60, step: 1, fmt: (v) => v + " px", when: (S) => S.structure !== "roped" },
+        { type: "button", label: "Fill gaps now", cmd: "fill", when: (S) => S.structure !== "roped" },
+        { type: "button", label: "Clear painting", cmd: "regrow", when: (S) => S.structure !== "roped" },
         { type: "note", text: "Click the canvas to add food: it joins the nearest cord.", when: (S) => S.structure === "roped" },
       ],
       create: (env, S) => (S.structure === "roped" ? createPathsEngine(env, S, { word: env.geo }) : createWovenEngine(env, S, env.geo)),
@@ -48,11 +50,12 @@
     network: {
       name: "Network",
       about: "A fungus on a blank page. Spores sprout, threads explore, fuse into one network, find food, thicken into cords, and idle threads die back. Click to drop food; hover to send a signal through the network.",
-      defaults: { spores: 3, food: 7, reach: 0.5, density: 0.5, branching: 0.5, wander: 0.5, cords: 0.5, weight: 1, variation: 0.5, prune: true, showFood: true },
+      defaults: { start: "spores", spores: 3, food: 7, reach: 0.5, density: 0.5, branching: 0.5, wander: 0.35, cords: 0.5, weight: 1, variation: 0.5, prune: true, showFood: true },
       controls: [
         { type: "button", label: "New network", cmd: "regrow", primary: true, hint: "New positions, new random recipe" },
         { type: "section", label: "Colony" },
-        { type: "range", key: "spores", label: "Spores", min: 1, max: 8, step: 1, fmt: String, regrow: true },
+        { type: "select", key: "start", label: "Start from", options: [["spores", "Scattered spores"], ["dish", "One colony in the centre (like a petri dish)"]], regrow: true },
+        { type: "range", key: "spores", label: "Spores", min: 1, max: 8, step: 1, fmt: String, regrow: true, when: (S) => S.start !== "dish" },
         { type: "range", key: "food", label: "Food sources", min: 0, max: 16, step: 1, fmt: String, regrow: true },
         { type: "range", key: "reach", label: "Reach", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true },
         { type: "range", key: "density", label: "Density", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true },
@@ -68,8 +71,8 @@
     },
     paths: {
       name: "Paths",
-      about: "Click to place food sources, then press Connect: each one is colonised and joined to the others by the shortest network, with cords twisted like rope. Upload a sketch to trace your points on it.",
-      defaults: { web: 0.3, wander: 0.5, branching: 0.4, explore: 0.5, fluff: 0.5, strands: 3, twist: 0.5, weight: 1, variation: 0.5 },
+      about: "Click to place food sources, then press Connect: each one is colonised, the mycelium forages until it has joined them all, and the busy routes thicken into cords. Upload a sketch to trace your points on it.",
+      defaults: { growth: "forage", web: 0.3, wander: 0.35, branching: 0.4, explore: 0.5, fluff: 0.5, strands: 3, twist: 0.5, weight: 1, variation: 0.5 },
       controls: [
         { type: "button", label: "Connect", cmd: "connect", primary: true, hint: "Grow mycelium between your food sources (a new random result each time)" },
         { type: "button", label: "Undo last point", cmd: "undo" },
@@ -78,17 +81,19 @@
         { type: "section", label: "Trace a sketch" },
         { type: "trace" },
         { type: "section", label: "Style" },
+        { type: "select", key: "growth", label: "Growth", options: [["forage", "Realistic: forage, then prune"], ["planned", "Planned: straight to the shortest links"]], regrow: true },
+        { type: "note", text: "Realistic: the fungus doesn't know where the food is. It explores, joins whatever it reaches, thickens the routes that carry food and lets the rest die back. Slower, truer.", when: (S) => S.growth === "forage" },
         { type: "range", key: "web", label: "Connections: efficient ↔ web", min: 0, max: 1, step: 0.01, fmt: (v) => (v < 0.05 ? "efficient" : pct(v)), regrow: true },
         { type: "range", key: "wander", label: "Wander", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true },
         { type: "range", key: "branching", label: "Branching", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true },
         { type: "range", key: "explore", label: "Exploring threads", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true },
         { type: "range", key: "fluff", label: "Fluff (cottony mats)", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true },
         { type: "range", key: "strands", label: "Rope strands", min: 1, max: 6, step: 1, fmt: String, regrow: true },
-        { type: "range", key: "twist", label: "Twist", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true },
+        { type: "range", key: "twist", label: "Twist (0 = threads bundled side by side)", min: 0, max: 1, step: 0.01, fmt: (v) => (v < 0.02 ? "bundled" : pct(v)), regrow: true },
         { type: "range", key: "weight", label: "Thread weight", min: 0.4, max: 2.5, step: 0.05, fmt: times },
         { type: "range", key: "variation", label: "Variation between runs", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true },
       ],
-      create: (env, S) => createPathsEngine(env, S),
+      create: (env, S) => (S.growth === "planned" ? createPathsEngine(env, S) : createForageEngine(env, S)),
     },
   };
 
@@ -215,7 +220,7 @@
       if (c.type === "trace") { traceControls(box); continue; }
       const f = document.createElement("div"); f.className = "field";
       const lab = document.createElement("label"); lab.htmlFor = id; lab.textContent = c.label; f.appendChild(lab);
-      const changed = () => { if (c.regrow) regrowSoon(); if (c.key === "text") writeHash(); if (c.key === "structure") renderControls(); };
+      const changed = () => { if (c.regrow) regrowSoon(); if (c.key === "text") writeHash(); if (c.type === "select") renderControls(); };
       if (c.type === "text") {
         const t = document.createElement("textarea"); t.id = id; t.rows = 2; t.value = S[c.key]; t.spellcheck = false;
         t.addEventListener("input", () => { S[c.key] = t.value.split("\n").slice(0, 4).join("\n"); changed(); });

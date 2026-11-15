@@ -46,6 +46,8 @@ function createNetworkEngine(env, S) {
     nodes = []; tips = []; foods = []; pulses = []; waves = []; adj = []; fusions = []; hash = new Map(); tipSeq = 0; lastFlow = 0; lastPulse = 0; lastWave = -9; later = [];
     const m = Math.min(env.W, env.H) * 0.08;
     for (let k = 0; k < (S.food ?? 7); k++) addFood(p.random(m, env.W - m), p.random(m, env.H - m), p.random(14, 34));
+    // petri dish: one colony in the centre growing out as an even, circular front
+    if (S.start === "dish") { spore(env.W / 2, env.H / 2, 28); return; }
     const n = S.spores ?? 3;
     for (let k = 0; k < n; k++) {
       const x = p.random(m * 2, env.W - m * 2), y = p.random(m * 2, env.H - m * 2);
@@ -62,7 +64,7 @@ function createNetworkEngine(env, S) {
       while (tp.carry >= STEP && keep) {
         tp.carry -= STEP;
         const { x, y } = tp.node;
-        let a = tp.ang + p.random(-R.wander, R.wander);
+        let a = tp.ang + hyphaTurn(tp, R.wander);
         let best = null, bd = 220;
         for (const f of foods) { if (f.amount <= 0.05) continue; const d = Math.hypot(f.x - x, f.y - y) - f.r; if (d < bd) { bd = d; best = f; } }
         if (best) { let da = Math.atan2(best.y - y, best.x - x) - a; da = Math.atan2(Math.sin(da), Math.cos(da)); a += da * 0.12 * (1 - bd / 220); }
@@ -108,10 +110,13 @@ function createNetworkEngine(env, S) {
     for (const n of nodes) n.flow = 0;
     for (const f of foods) {
       if (!f.found || f.amount <= 0) continue;
-      for (const c of f.contacts.slice(-6)) { let n = c; while (n) { n.flow += f.amount; n.lastFlow = env.t; n = n.parent; } }
+      for (const c of f.contacts.slice(-6)) { let n = c.dead ? null : c; while (n && !n.dead) { n.flow += f.amount; n.lastFlow = env.t; n = n.parent; } }
       f.amount = Math.max(0, f.amount - 0.004);
     }
-    for (const n of nodes) if (!n.root && !n.dead && n.flow === 0 && env.t - Math.max(n.born, n.lastFlow) > R.dieback) n.dead = env.t;
+    // die-back retracts from the tips inward: a thread only withdraws once nothing beyond it is alive
+    const kids = new Int32Array(nodes.length);
+    for (const n of nodes) if (!n.dead && n.parent) kids[n.parent.id]++;
+    for (let i = nodes.length - 1; i >= 0; i--) { const n = nodes[i]; if (!n.root && !n.dead && !kids[n.id] && n.flow === 0 && env.t - Math.max(n.born, n.lastFlow) > R.dieback) { n.dead = env.t; if (n.parent) kids[n.parent.id]--; } }
   }
   function sendWave() {
     let best = null, bd = 40;
