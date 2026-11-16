@@ -25,6 +25,10 @@ function createWovenEngine(env, S, geo) {
   const agar = (x, y) => geo.inside(x, y) || painted(x, y);
   const OG = S.structure === "outgrowth";   // letters packed with mycelium that grows out of them, thinning
   let ogSpawned = 0, ogMax = 0, lastOg = 0;
+  // "Letters reach for each other": some outgrowing threads seek the neighbouring letters; where they
+  // arrive, the route becomes a thick cord and pulses travel across it (the network thrives on connection)
+  const CONNECT = OG ? (S.connect ?? 0.6) : 0;
+  let bridges = [], linked = new Set(), lastBridgePulse = 0;
   const counter = (x, y) => (S.counters ?? true) && geo.inCounter(x, y) && !painted(x, y);
 
   function addNode(x, y, parent, tipId) {
@@ -84,7 +88,7 @@ function createWovenEngine(env, S, geo) {
     const stride = Math.max(1, Math.round((STEP * 3) / geo.cell));
     coverPts = [];
     for (const L of geo.letters) for (const c of L.cells) if (((c.x / geo.cell) | 0) % stride === 0 && ((c.y / geo.cell) | 0) % stride === 0) coverPts.push({ x: c.x, y: c.y });
-    if (OG) { let edge = 0; for (const L of geo.letters) for (const c of L.cells) if (c.depth === 0) edge++; ogMax = Math.round(edge * (geo.cell / STEP) * (0.12 + 0.3 * R.density)); }
+    if (OG) { let edge = 0; for (const L of geo.letters) for (const c of L.cells) if (c.depth === 0) edge++; ogMax = Math.round(edge * (geo.cell / STEP) * (0.08 + 0.2 * R.density)); planBridges(); }
     for (let k = 0; k < R.spots && geo.letters.length; k++) { const [x, y] = randomInside(p.random(geo.letters)); spots.push({ x, y, r: geo.fontPx * p.random(0.03, 0.07), amount: 1, found: false, contacts: [] }); }
     later = geo.letters.map((L) => { const [x, y] = randomInside(L); return { at: p.random(0, R.stagger), x, y }; });
     for (let k = 0; k < R.sporesExtra && geo.letters.length; k++) { const [x, y] = randomInside(p.random(geo.letters)); later.push({ at: p.random(2, 12), x, y }); }
@@ -119,6 +123,45 @@ function createWovenEngine(env, S, geo) {
     fillDone = false;
   }
 
+  // planned connections: each pair of neighbouring letters on a line sends cords across from their closest edges
+  let plan = [];
+  function planBridges() {
+    plan = [];
+    if (!CONNECT) return;
+    const Ls = geo.letters, edge = (L) => { const e = L.cells.filter((c) => c.depth === 0); return e.length > 300 ? e.filter((_, i) => i % Math.ceil(e.length / 300) === 0) : e; };
+    for (let i = 0; i + 1 < Ls.length; i++) {
+      const A = Ls[i], B = Ls[i + 1];
+      if (Math.abs(A.cy - B.cy) > geo.fontPx * 0.5) continue;   // next letter is on another line
+      const eA = edge(A), eB = edge(B);
+      const cand = eA.map((c) => { let bd = Infinity, bt = null; for (const d of eB) { const q = Math.hypot(d.x - c.x, d.y - c.y); if (q < bd) { bd = q; bt = d; } } return { c, t: bt, d: bd }; }).sort((u, v) => u.d - v.d);
+      const k = Math.max(1, Math.round(1 + 3 * CONNECT)), pool = cand.slice(0, Math.max(k, Math.round(cand.length * 0.25)));
+      for (let j = 0; j < k; j++) { const pick = pool[(Math.random() * pool.length) | 0]; plan.push({ from: A, to: B, c: pick.c, t: pick.t, d: pick.d, at: R.stagger + 3 + Math.random() * 10, tries: 0, done: false }); }
+    }
+  }
+  function launchPlanned() {
+    for (const b of plan) {
+      if (b.done || env.t < b.at || b.tries >= 4) continue;
+      let src = null, sd = STEP * 6;
+      near(b.c.x, b.c.y, sd, (n) => { if (n.dead || n.og) return; const d = Math.hypot(n.x - b.c.x, n.y - b.c.y); if (d < sd) { sd = d; src = n; } });
+      if (!src) { b.at = env.t + 1; continue; }
+      const t = newTip(src, Math.atan2(b.t.y - src.y, b.t.x - src.x), 1e9);
+      t.og = true; t.out = 0; t.li = b.from.li; t.seek = { cx: b.t.x, cy: b.t.y }; t.strong = true; t.reach = (b.d / STEP) * 2.5 + 10; t.plan = b;
+      tips.push(t); b.tries++; b.at = env.t + 4;   // if it hasn't arrived in a few seconds, try again
+    }
+  }
+  function chainOut(n) { const out = []; while (n && n.og) { out.push(n); n = n.parent; } if (n) out.push(n); return out; }
+  function makeBridge(a, b, la, lb) {
+    const path = chainOut(a).reverse().concat(b ? chainOut(b) : []);
+    if (path.length < 3) return;
+    for (const n of path) n.bridge = true;
+    bridges.push(path); linked.add(Math.min(la, lb) + "-" + Math.max(la, lb));
+    // a connection thrives: fresh short threads branch off along the new cord
+    for (let i = 2; i < path.length - 2; i += 3) {
+      if (Math.random() > 0.25) continue;
+      const n = path[i], q = path[i + 1], d = Math.atan2(q.y - n.y, q.x - n.x) + (Math.random() < 0.5 ? -1 : 1) * p.random(0.7, 1.4);
+      const t = newTip(n, d, 1e9); t.og = true; t.out = 2; t.reach = p.random(4, 16); t.li = n.li; tips.push(t);
+    }
+  }
   function grow(dt) {
     for (const s of later) if (!s.done && env.t >= s.at) { s.done = true; inoculate(s.x, s.y); }
     const alive = [], born = [], speed = STEP * 13;
@@ -148,8 +191,17 @@ function createWovenEngine(env, S, geo) {
         // outgrowth: threads leaving the letter keep going, thinning, until they run out of reach
         if (tp.og) {
           if (counter(nx, ny)) { keep = false; break; }
-          if (!geo.inside(nx, ny)) tp.out++;
+          const lt = geo.letterAt(nx, ny);
+          if (lt >= 0 && lt !== tp.li && tp.out > 0 && tp.li !== undefined) { makeBridge(tp.node, null, tp.li, lt); if (tp.plan) tp.plan.done = true; keep = false; break; }
+          if (lt < 0) tp.out++;
           if (tp.out > tp.reach) { keep = false; break; }
+          // a seeking thread bends toward the nearest neighbouring letter
+          if (tp.seek && tp.out > 1) {
+            const L = tp.seek, d = Math.hypot(L.cx - x, L.cy - y);
+            let da = Math.atan2(L.cy - y, L.cx - x) - a; da = Math.atan2(Math.sin(da), Math.cos(da));
+            a += da * (tp.strong ? 0.3 : (0.05 + 0.12 * CONNECT) * Math.min(1, tp.out / 6)); nx = x + Math.cos(a) * STEP; ny = y + Math.sin(a) * STEP;
+            if (d < STEP * 2) tp.seek = null;
+          }
         }
         // the edge of the agar: usually turn back along it; sometimes break out (Spill decides)
         else if (!agar(nx, ny)) {
@@ -171,14 +223,14 @@ function createWovenEngine(env, S, geo) {
         // fuse with threads it meets (once it has grown away from where it started)
         let fuse = null;
         if (tp.len > STEP * 10 && !tp.target && !(tp.og && tp.out < 4)) near(nx, ny, STEP * 1.25, (n) => { if (!fuse && !n.dead && n.tipId !== tp.id && n !== tp.node && n !== tp.node.parent && Math.abs(env.t - n.born) > 1.5) fuse = n; });
-        if (fuse) { adj[tp.node.id].push(fuse.id); adj[fuse.id].push(tp.node.id); fusions.push([tp.node, fuse]); if (p.random() < 0.75) { keep = false; break; } }
+        if (fuse) { adj[tp.node.id].push(fuse.id); adj[fuse.id].push(tp.node.id); fusions.push([tp.node, fuse]); if (CONNECT && tp.og && fuse.li !== undefined && tp.li !== undefined && fuse.li !== tp.li) { makeBridge(tp.node, fuse, tp.li, fuse.li); keep = false; break; } if (p.random() < 0.75) { keep = false; break; } }
         // ground already taken: stop (outside the letter is poor ground, so threads there stay sparse)
         let crowd = 0;
         near(nx, ny, STEP * 2.7, (n) => { if (!n.dead && n.tipId !== tp.id) crowd++; });
-        const lim = tp.og ? (tp.out < 3 ? 99 : 2) : tp.out > 0 ? Math.max(2, R.crowd - 2) : R.crowd;
+        const lim = tp.og ? (tp.out < 3 || tp.strong ? 99 : tp.seek ? 4 : 2) : tp.out > 0 ? Math.max(2, R.crowd - 2) : R.crowd;
         if (!tp.target && crowd > lim && tp.len > STEP * 6) { keep = false; break; }
         const n = addNode(nx, ny, tp.node, tp.id);
-        n.out = tp.out; n.exit = tp.exit; n.og = tp.og;
+        n.out = tp.out; n.exit = tp.exit; n.og = tp.og; n.li = tp.og ? tp.li : geo.letterAt(nx, ny);
         tp.node = n; tp.len += STEP;
         for (const f of spots) if (f.amount > 0.05 && Math.hypot(f.x - nx, f.y - ny) < f.r) {
           f.contacts.push(n);
@@ -186,7 +238,7 @@ function createWovenEngine(env, S, geo) {
         }
         if (tips.length + born.length < 360 && p.random() < R.branch * (tp.og ? 1.4 : tp.out > 0 ? 0.3 : 1)) {
           const c = newTip(n, a + (p.random() < 0.5 ? -1 : 1) * p.random(tp.og ? 0.3 : 0.45, tp.og ? 0.8 : 1.1), (tp.target ? geo.fontPx * 0.3 : tp.max) * p.random(0.5, 0.95));
-          if (tp.og) { c.og = true; c.reach = tp.reach; c.max = 1e9; }
+          if (tp.og) { c.og = true; c.reach = tp.reach; c.max = 1e9; c.li = tp.li; c.seek = p.random() < 0.3 ? tp.seek : null; }
           born.push(c);
         }
         if (tp.len > tp.max) { keep = false; break; }
@@ -210,6 +262,7 @@ function createWovenEngine(env, S, geo) {
     // gaps: once the first growth has settled, look for unreached parts of the letters and reach into them
     if (env.t > R.stagger + 3 && env.t - lastFill > 0.8 && tips.length < 80) { lastFill = env.t; fillGaps(false); }
     // outgrowth: from the letter's edge, threads grow outward (normal to the outline, spreading as they go)
+    if (OG && CONNECT) launchPlanned();
     if (OG && env.t > R.stagger + 2 && env.t - lastOg > 0.3 && ogSpawned < ogMax && nodes.length < MAX_NODES) {
       lastOg = env.t;
       let made = 0;
@@ -220,7 +273,13 @@ function createWovenEngine(env, S, geo) {
         for (let d = 0; d < 12; d++) { const a = (d / 12) * 6.283, cx = Math.cos(a), cy = Math.sin(a); if (!geo.inside(n.x + cx * STEP * 3, n.y + cy * STEP * 3) && !counter(n.x + cx * STEP * 3, n.y + cy * STEP * 3)) { ox += cx; oy += cy; } }
         if (!ox && !oy) continue;
         const t = newTip(n, Math.atan2(oy, ox) + p.random(-0.45, 0.45), 1e9);
-        t.og = true; t.out = 0; t.reach = R.reachSteps * p.random(0.3, 1.1);
+        t.og = true; t.out = 0; t.reach = R.reachSteps * p.random(0.3, 1.1); t.li = geo.letterAt(n.x, n.y);
+        // some threads set out for the nearest neighbouring letter in the direction they face
+        if (CONNECT && t.li >= 0 && Math.random() < 0.03 * CONNECT) {
+          let best = null, bd = geo.fontPx * 1.6;
+          for (const L of geo.letters) { if (L.li === t.li) continue; const dx = L.cx - n.x, dy = L.cy - n.y, d = Math.hypot(dx, dy); if (d < bd && (dx * ox + dy * oy) / (d * Math.hypot(ox, oy)) > 0.2) { bd = d; best = L; } }
+          if (best) { t.seek = best; t.reach = Math.max(t.reach, (bd / STEP) * 1.6); }
+        }
         tips.push(t); made++; ogSpawned++;
       }
     }
@@ -256,6 +315,7 @@ function createWovenEngine(env, S, geo) {
         const live = spots.filter((f) => f.found && f.amount > 0 && f.contacts.length);
         if (live.length) { let n = p.random(p.random(live).contacts); const path = []; while (n && path.length < 3000) { path.push(n); n = n.parent; } pulses.push({ path, pos: 0 }); }
       }
+      if (bridges.length && env.t - lastBridgePulse > 1.2 / bridges.length) { lastBridgePulse = env.t; const b = p.random(bridges); pulses.push({ path: Math.random() < 0.5 ? b : b.slice().reverse(), pos: 0, big: true }); }
       pulses = pulses.filter((pl) => (pl.pos += dt * 60) < pl.path.length);
       if (env.pointer.active && !env.pointer.down && env.t - lastWave > 1.4) { lastWave = env.t; sendWave(); }
       waves = waves.filter((w) => (env.t - w.t0) * 80 < 3000);
@@ -269,7 +329,7 @@ function createWovenEngine(env, S, geo) {
     },
     pointerUp() { dragFrom = null; },
     command(c) { if (c === "fill") fillGaps(true); if (c === "clearPaint") { paint.fill(0); } },
-    status() { return R.label + (tips.length ? (OG && ogSpawned ? " · growing out" : " · growing") : fillDone ? " · filled" : ""); },
+    status() { return R.label + (linked.size ? ` · ${linked.size} letter connection${linked.size > 1 ? "s" : ""}` : "") + (tips.length ? (OG && ogSpawned ? " · growing out" : " · growing") : fillDone ? " · filled" : ""); },
     render(ctx, screen, ink) {
       ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = ink; ctx.fillStyle = ink;
       if (screen && S.guide) { ctx.globalAlpha = 0.08; geo.drawText(ctx); ctx.globalAlpha = 1; }
@@ -277,7 +337,7 @@ function createWovenEngine(env, S, geo) {
       for (const n of nodes) {
         if (!n.parent) continue;
         let w = base + Math.min(STEP * 2.5, Math.log2(1 + n.flow) * STEP * 0.35 * R.cord);
-        if (OG) w = n.og && n.out > 0 ? base * 1.9 * Math.pow(Math.max(0.1, 1 - n.out / R.reachSteps), 0.6 + 1.6 * R.taper) : base * 2.1;
+        if (OG) w = n.bridge ? base * (2.2 + 2.2 * CONNECT) : n.og && n.out > 0 ? base * 1.25 * Math.pow(Math.max(0.1, 1 - n.out / R.reachSteps), 0.6 + 1.6 * R.taper) : base * (1.5 + 2.4 * R.density);   // denser letters are drawn darker
         if (n.dead) { const k = 1 - (env.t - n.dead) / 6; if (k <= 0) continue; w *= k; }
         const q = Math.round(w * 4) / 4;
         let b = buckets.get(q); if (!b) buckets.set(q, (b = [])); b.push(n);

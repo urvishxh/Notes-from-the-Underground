@@ -6,7 +6,7 @@
 //   letters          each letter with its grid cells { x, y, depth } (depth = steps from the outline)
 //   drawText(ctx)    draws the word (used for the faint letter guide on screen)
 // Up to 4 lines (press Enter in the word box).
-function buildGeometry({ W, H, text, family, weight, size }) {
+function buildGeometry({ W, H, text, family, weight, size, tracking = 0 }) {
   const lines = String(text || "").split("\n").map((s) => s.replace(/\s+$/, "")).filter((s, i, a) => s.length || a.length === 1).slice(0, 4);
   if (!lines.length || !lines.some((s) => s.trim())) lines.splice(0, lines.length, "mycelium");
   const font = (fs) => `${weight} ${fs}px "${family}", sans-serif`;
@@ -14,7 +14,7 @@ function buildGeometry({ W, H, text, family, weight, size }) {
   // fit the block: as large as possible inside the canvas (size = how much of it to fill)
   mc.font = font(100);
   const m100 = lines.map((s) => mc.measureText(s || " "));
-  const maxW = Math.max(...m100.map((m) => m.width), 1);
+  const maxW = Math.max(...m100.map((m, i) => m.width + tracking * 100 * Math.max(0, lines[i].length - 1)), 1);   // tracking: extra space between letters, in em
   const asc100 = Math.max(...m100.map((m) => m.actualBoundingBoxAscent || 72)), des100 = Math.max(...m100.map((m) => m.actualBoundingBoxDescent || 20));
   const lineH100 = asc100 + des100 + 14;
   const fs = Math.max(12, Math.min((W * 0.88 * size) / maxW, (H * 0.8 * size) / (lineH100 * lines.length - 14)) * 100);
@@ -23,10 +23,10 @@ function buildGeometry({ W, H, text, family, weight, size }) {
   const top = (H - blockH) / 2;
   const placed = [];   // { ch, x, y } baseline positions, per glyph
   lines.forEach((s, li) => {
-    const w = mc.measureText(s).width, x0 = (W - w) / 2, y = top + asc + li * lineH;
+    const w = mc.measureText(s).width + tracking * fs * Math.max(0, s.length - 1), x0 = (W - w) / 2, y = top + asc + li * lineH;
     for (let i = 0; i < s.length; i++) {
       const ch = s[i]; if (!ch.trim()) continue;
-      placed.push({ ch, x: x0 + mc.measureText(s.slice(0, i)).width, y });
+      placed.push({ ch, x: x0 + mc.measureText(s.slice(0, i)).width + tracking * fs * i, y });
     }
   });
 
@@ -77,7 +77,7 @@ function buildGeometry({ W, H, text, family, weight, size }) {
   }
   const inCounter = (x, y) => { const gx = (x / g) | 0, gy = (y / g) | 0; if (gx < 0 || gy < 0 || gx >= gw || gy >= gh) return false; const i = gy * gw + gx; return gl[i] < 0 && !reach[i]; };
 
-  const letters = placed.map((p) => ({ ch: p.ch, cells: [], minx: 1e9, maxx: -1e9, miny: 1e9, maxy: -1e9 }));
+  const letters = placed.map((p, li) => ({ ch: p.ch, li, cells: [], minx: 1e9, maxx: -1e9, miny: 1e9, maxy: -1e9 }));
   for (let gy = 0; gy < gh; gy++) for (let gx = 0; gx < gw; gx++) {
     const i = gy * gw + gx, li = gl[i]; if (li < 0) continue;
     const L = letters[li], x = gx * g + g / 2, y = gy * g + g / 2;
@@ -85,5 +85,8 @@ function buildGeometry({ W, H, text, family, weight, size }) {
     L.minx = Math.min(L.minx, x); L.maxx = Math.max(L.maxx, x); L.miny = Math.min(L.miny, y); L.maxy = Math.max(L.maxy, y);
   }
   const drawText = (ctx) => { ctx.font = font(fs); ctx.textBaseline = "alphabetic"; for (const p of placed) ctx.fillText(p.ch, p.x, p.y); };
-  return { W, H, fontPx: fs, cell: g, inside, inCounter, letters: letters.filter((L) => L.cells.length), drawText };
+  for (const L of letters) { let x = 0, y = 0; for (const c of L.cells) { x += c.x; y += c.y; } L.cx = x / (L.cells.length || 1); L.cy = y / (L.cells.length || 1); }
+  // which letter a point is in (-1 = none)
+  const letterAt = (x, y) => { x |= 0; y |= 0; return x >= 0 && y >= 0 && x < W && y < H && mask[y * W + x] ? owner[y * W + x] : -1; };
+  return { W, H, fontPx: fs, cell: g, inside, inCounter, letterAt, letters: letters.filter((L) => L.cells.length), drawText };
 }

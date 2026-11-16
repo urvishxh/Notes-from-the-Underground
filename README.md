@@ -8,6 +8,7 @@ Plain HTML + JavaScript, no build step. p5.js 1.9.4 (instance mode) runs the can
 - **Type**: type a word (up to 4 lines), pick a font or upload your own.
   - *Woven*: a lab culture fills each letter. **Spill** lets threads cross the outline (0 = bound); counters can be kept open so the word reads. The culture keeps finding unreached parts of the letters and grows into them, so no gaps are left. **Drag on the canvas** to paint fresh ground: the network grows into it from its nearest threads. **Fill gaps now** forces a pass.
   - *Outgrowth*: the letters are packed dark with mycelium and threads grow out of their edges, thinning and spreading as they go. **How far it grows out** and **Thinning** shape the halo.
+    **Letters reach for each other** sends cords between neighbouring letters from their closest edges: where they arrive, the route thickens into a cord and pulses cross it. **Letter spacing** gives the connections room.
   - *Roped*: food is placed along the centre line of every stroke and joined by twisted cords.
 - **Network**: a fungus on a blank page. Start from scattered spores or one colony in the centre (like a petri dish). Spores, food, reach, density, branching, wander, cords, die-back. **New network** gives a new random result. Click to drop food; hover to send a signal.
 - **Paths**: click to place food sources, then **Connect**.
@@ -45,3 +46,7 @@ Keys: Space pause · N new growth · H hide controls.
 ## Website
 
 Deployed on Vercel from the `main` branch of this repository: every push updates the site.
+
+## Outputs
+
+`outputs/` holds finished images, e.g. *connection* (Type · Outgrowth, Space Grotesk Bold, letter spacing +18%, density 85%, how far it grows out 60%, letters reach for each other 90%).

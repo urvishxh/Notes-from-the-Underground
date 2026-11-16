@@ -14,7 +14,7 @@
     type: {
       name: "Type",
       about: "Type a word: mycelium grows through the letters. Woven fills each letter like a lab culture; Outgrowth packs the letters dark and grows threads out of them that thin as they go; Roped traces each stroke with cords. Drag on the canvas to grow mycelium into any space.",
-      defaults: { text: "mycelium", font: "Space Grotesk", fontWeight: 700, size: 0.85, structure: "woven", spill: 0.25, density: 0.7, branching: 0.5, wander: 0.35, cords: 0.5, weight: 1, variation: 0.5, counters: true, guide: false, brush: 18, fluff: 0.4, strands: 3, twist: 0.5, explore: 0.5, reach: 0.5, taper: 0.5 },
+      defaults: { text: "mycelium", font: "Space Grotesk", fontWeight: 700, size: 0.85, tracking: 0, structure: "woven", spill: 0.25, density: 0.7, branching: 0.5, wander: 0.35, cords: 0.5, weight: 1, variation: 0.5, counters: true, guide: false, brush: 18, fluff: 0.4, strands: 3, twist: 0.5, explore: 0.5, reach: 0.5, taper: 0.5, connect: 0.6 },
       controls: [
         { type: "button", label: "Grow again", cmd: "regrow", primary: true, hint: "Same settings, a new random growth" },
         { type: "section", label: "Word" },
@@ -22,11 +22,13 @@
         { type: "font", key: "font", label: "Font", regrow: true },
         { type: "select", key: "fontWeight", label: "Font weight", options: [[300, "Light"], [400, "Regular"], [500, "Medium"], [700, "Bold"], [900, "Black"]], regrow: true },
         { type: "range", key: "size", label: "Size", min: 0.3, max: 1, step: 0.01, fmt: pct, regrow: true },
+        { type: "range", key: "tracking", label: "Letter spacing", min: -0.1, max: 0.8, step: 0.01, fmt: (v) => (v >= 0 ? "+" : "") + Math.round(v * 100) + "%", regrow: true },
         { type: "section", label: "Growth" },
         { type: "select", key: "structure", label: "Structure", options: [["woven", "Woven: a culture fills each letter"], ["outgrowth", "Outgrowth: grows out of the letters"], ["roped", "Roped: cords trace each stroke"]], regrow: true },
         { type: "range", key: "spill", label: "Spill past the outline", min: 0, max: 1, step: 0.01, fmt: (v) => (v < 0.03 ? "bound" : pct(v)), regrow: true, when: (S) => S.structure === "woven" },
         { type: "range", key: "density", label: "Density", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true, when: (S) => S.structure !== "roped" },
         { type: "range", key: "reach", label: "How far it grows out", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true, when: (S) => S.structure === "outgrowth" },
+        { type: "range", key: "connect", label: "Letters reach for each other", min: 0, max: 1, step: 0.01, fmt: (v) => (v < 0.02 ? "off" : pct(v)), regrow: true, when: (S) => S.structure === "outgrowth" },
         { type: "range", key: "taper", label: "Thinning as it grows out", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true, when: (S) => S.structure === "outgrowth" },
         { type: "range", key: "branching", label: "Branching", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true },
         { type: "range", key: "wander", label: "Wander", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true },
@@ -132,7 +134,7 @@
     if (tab === "type") {
       try { await document.fonts.load(`${S.fontWeight} 100px "${S.font}"`); } catch (e) {}
       if (id !== buildId) return;
-      env.geo = buildGeometry({ W: env.W, H: env.H, text: S.text, family: S.font, weight: S.fontWeight, size: S.size });
+      env.geo = buildGeometry({ W: env.W, H: env.H, text: S.text, family: S.font, weight: S.fontWeight, size: S.size, tracking: S.tracking || 0 });
     } else env.geo = null;
     engine = T.create(env, S);
     updateTrace();
