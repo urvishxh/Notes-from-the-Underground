@@ -229,13 +229,12 @@
         const sel = document.createElement("select"); sel.id = id;
         const opts = c.type === "font" ? fontOpts() : c.options;
         for (const [v, t] of opts) { const o = document.createElement("option"); o.value = v; o.textContent = t; sel.appendChild(o); }
-        if (c.type === "font") { const o = document.createElement("option"); o.value = "__upload"; o.textContent = "Upload a font file…"; sel.appendChild(o); }
         sel.value = S[c.key];
         sel.addEventListener("change", () => {
-          if (sel.value === "__upload") { sel.value = S[c.key]; uploadFont(c.key); return; }
           S[c.key] = typeof S[c.key] === "number" ? +sel.value : sel.value; changed();
         });
         f.appendChild(sel);
+        if (c.type === "font") fontUpload(f, c.key);
       } else if (c.type === "range") {
         const row = document.createElement("div"); row.className = "range";
         const inp = document.createElement("input"); inp.type = "range"; inp.id = id; inp.min = c.min; inp.max = c.max; inp.step = c.step; inp.value = S[c.key];
@@ -272,18 +271,35 @@
     rm.addEventListener("click", () => { trace.src = ""; updateTrace(); renderControls(); });
     box.appendChild(rm);
   }
-  function uploadFont(key) {
-    const inp = document.createElement("input"); inp.type = "file"; inp.accept = ".ttf,.otf,.woff,.woff2,font/*";
-    inp.addEventListener("change", async () => {
-      const f = inp.files && inp.files[0]; if (!f) return;
-      const name = f.name.replace(/\.[^.]+$/, "").replace(/[^\w -]/g, "") || "Uploaded font";
+  // Upload a font: a real button (a label for a file input in the page), so every browser opens the
+  // file picker, including Safari and the claude.ai preview. You can also drop a font file on it.
+  const uploaded = new Set();
+  function fontUpload(field, key) {
+    const id = "font-file";
+    const inp = document.createElement("input"); inp.type = "file"; inp.id = id; inp.className = "visually-hidden";
+    inp.accept = ".ttf,.otf,.woff,.woff2";
+    const lab = document.createElement("label"); lab.htmlFor = id; lab.className = "btn upload"; lab.textContent = "Upload a font file (.ttf .otf .woff .woff2)";
+    lab.tabIndex = 0; lab.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); inp.click(); } });
+    const msg = document.createElement("p"); msg.className = "note"; msg.setAttribute("aria-live", "polite");
+    if (uploaded.has(settings.type[key])) msg.textContent = "Using your font: " + settings.type[key];
+    const use = async (file) => {
+      if (!file) return;
+      if (!/\.(ttf|otf|woff2?)$/i.test(file.name)) { msg.textContent = "That isn't a font file. Use a .ttf, .otf, .woff or .woff2 file."; return; }
+      msg.textContent = "Loading " + file.name + "…";
+      let name = file.name.replace(/\.[^.]+$/, "").replace(/[^\w -]/g, " ").replace(/\s+/g, " ").trim() || "My font";
+      if (FONTS.includes(name) && !uploaded.has(name)) name += " (yours)";
       try {
-        const face = new FontFace(name, await f.arrayBuffer()); await face.load(); document.fonts.add(face);
-        if (!FONTS.includes(name)) FONTS.unshift(name);
+        const face = new FontFace(name, await file.arrayBuffer());
+        await face.load(); document.fonts.add(face);
+        uploaded.add(name); if (!FONTS.includes(name)) FONTS.unshift(name);
         settings.type[key] = name; renderControls(); build();
-      } catch (e) { alert("That font file couldn't be read. Try a .ttf, .otf or .woff file."); }
-    });
-    inp.click();
+      } catch (e) { msg.textContent = "That font file couldn't be read (" + file.name + "). Try another format: .ttf or .otf usually work best."; }
+    };
+    inp.addEventListener("change", () => { use(inp.files && inp.files[0]); inp.value = ""; });
+    lab.addEventListener("dragover", (e) => { e.preventDefault(); lab.classList.add("drop"); });
+    lab.addEventListener("dragleave", () => lab.classList.remove("drop"));
+    lab.addEventListener("drop", (e) => { e.preventDefault(); lab.classList.remove("drop"); use(e.dataTransfer.files && e.dataTransfer.files[0]); });
+    field.append(inp, lab, msg);
   }
 
   // ---------- canvas settings, export ----------
