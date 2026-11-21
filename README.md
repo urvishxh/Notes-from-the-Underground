@@ -20,7 +20,7 @@ Threads turn in smooth arcs (a correlated random walk, `js/hypha.js`), so they r
 
 Fonts: Google Fonts (incl. Roboto, Roboto Condensed, Roboto Mono), Satoshi from Fontshare, or upload your own.
 
-- **Text**: write a paragraph and it grows like mycelium. Every thread is a line of your text: it sprouts from the paragraph's edges (or one point, or your clicks), turns in gentle arcs, branches (the branch carries on with the next word), steers away from other text and stops when it runs into it. Letters get smaller (**Letters get smaller**) and further apart (**Letters spread apart**) as they grow; optional fading and visible threads. SVG export keeps the letters as real text.
+- **Text**: write a paragraph and it grows like mycelium. Every thread is a line of your text, turning in gentle arcs. Three styles: *Unravel* (a large paragraph whose lines keep going past the margin, fan out and fray), *Colony* (threads radiate from the first word) and *Mat* (the page woven from fine text). Branches carry on with the next word, smaller and lighter than their parent, and are marked by a small knot. Threads avoid other text and stop when they run into it. Letters hold their size for a few words, then shrink (**Letters get smaller**) and spread apart (**Letters spread apart**), and when they are too small to read the thread carries on as a bare hypha. SVG export keeps the letters as real text.
 
 Every tab has **Variation between runs**: 0 keeps your settings exactly, higher values nudge them at random on every growth.
 Canvas: Fit screen, A4 portrait or landscape, or Square; ink on paper or light on dark; speed; pause. **Save PNG** (high resolution) and **Save SVG** (vector lines).
