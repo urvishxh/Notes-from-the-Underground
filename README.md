@@ -22,7 +22,8 @@ Fonts: Google Fonts (incl. Roboto, Roboto Condensed, Roboto Mono), Satoshi from 
 
 Every tab has **Variation between runs**: 0 keeps your settings exactly, higher values nudge them at random on every growth.
 Canvas: Fit screen, A4 portrait or landscape, or Square; ink on paper or light on dark; speed; pause. **Save PNG** (high resolution) and **Save SVG** (vector lines).
-Keys: Space pause · N new growth · H hide controls.
+**Record a clip**: 5, 10, 15 or 30 seconds of the live canvas as a video (MP4 where the browser supports it, otherwise WebM), starting from a new growth or from where it is now. The Speed setting turns it into a time-lapse.
+Keys: Space pause · N new growth · H hide controls · R record a clip.
 
 ## Files
 

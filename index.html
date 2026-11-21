@@ -58,6 +58,7 @@ select option { background: var(--panel); color: var(--ink); }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); border: 0; }
 .btn.primary { background: var(--accent); color: var(--panel); border-color: var(--accent); }
 .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#rec.recording { background: #b3261e; border-color: #b3261e; color: #fff; }
 #save-note { font-size: 12px; color: var(--soft); min-height: 1em; margin: 0; }
 .keys { font: 11px var(--mono); color: var(--soft); margin: 4px 0 0; }
 @media (max-width: 800px) {
@@ -97,8 +98,16 @@ select option { background: var(--panel); color: var(--ink); }
       <div class="field"><label for="speed">Speed</label><div class="range"><input id="speed" type="range" min="0.25" max="4" step="0.25" value="1"><output id="speed-out">1.0×</output></div></div>
       <button type="button" class="btn" id="pause">Pause</button>
       <div class="row"><button type="button" class="btn" id="png">Save PNG</button><button type="button" class="btn" id="svg">Save SVG</button></div>
+      <h3>Record a clip</h3>
+      <div class="row">
+        <div class="field"><label for="clip-len">Length</label><select id="clip-len"><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="15" selected>15 seconds</option><option value="30">30 seconds</option></select></div>
+        <div class="field"><label for="clip-from">Start from</label><select id="clip-from"><option value="new">A new growth</option><option value="now">Where it is now</option></select></div>
+      </div>
+      <div class="field"><label for="clip-q">Quality</label><select id="clip-q"><option value="8">Good (smaller file)</option><option value="16" selected>High</option><option value="30">Best (large file)</option></select></div>
+      <button type="button" class="btn primary" id="rec">Record clip</button>
+      <p class="note" id="rec-note">Records the canvas as a video (MP4 where your browser supports it, otherwise WebM). The Speed setting makes it a time-lapse.</p>
       <p id="save-note" aria-live="polite"></p>
-      <p class="keys">Space pause · N new growth · H hide controls</p>
+      <p class="keys">Space pause · N new growth · H hide controls · R record a clip</p>
     </div>
   </aside>
 </div>

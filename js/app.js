@@ -169,6 +169,7 @@
     p.windowResized = () => { clearTimeout(rt); rt = setTimeout(resize, 200); };
   });
   function resize() {
+    if (rec) return;   // keep the canvas size fixed while a clip is recording
     const s = size();
     if (s.W === env.W && s.H === env.H) { updateTrace(); return; }
     env.W = s.W; env.H = s.H; env.p.resizeCanvas(env.W, env.H); build();
@@ -318,12 +319,14 @@
       setTimeout(resize, 30);
     });
     $("#png").addEventListener("click", exportPNG);
+    $("#rec").addEventListener("click", () => (rec ? stopClip() : recordClip()));
     $("#svg").addEventListener("click", exportSVG);
     document.addEventListener("keydown", (e) => {
       if (e.target.closest("textarea, input, select")) return;
       if (e.key === " ") { e.preventDefault(); $("#pause").click(); }
       if (e.key === "n" || e.key === "N") build();
       if (e.key === "h" || e.key === "H") $("#toggle").click();
+      if (e.key === "r" || e.key === "R") $("#rec").click();
     });
   }
   const dlCap = window.claude && window.claude.use ? window.claude.use("downloads").catch(() => null) : Promise.resolve(null);
@@ -349,6 +352,42 @@
     engine.render(ctx, false, THEMES[theme].ink);
     c.toBlob((b) => download(fileBase() + ".png", b), "image/png");
   }
+  // ---------- video clips: the live canvas recorded as it grows ----------
+  let rec = null;
+  function pickType() {
+    const types = ["video/mp4;codecs=avc1.42E01E", "video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
+    return types.find((t) => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || "";
+  }
+  async function recordClip() {
+    const canvas = $("#canvas-host canvas"), note = $("#rec-note"), btn = $("#rec");
+    if (!canvas || !canvas.captureStream || !window.MediaRecorder) { note.textContent = "This browser can't record video. Try Chrome, Edge, Firefox or Safari 14.1+."; return; }
+    const secs = +$("#clip-len").value, type = pickType(), ext = type.startsWith("video/mp4") ? "mp4" : "webm";
+    if ($("#clip-from").value === "new") await build();
+    if (paused) $("#pause").click();
+    const stream = canvas.captureStream(30);
+    let mr;
+    try { mr = new MediaRecorder(stream, { mimeType: type || undefined, videoBitsPerSecond: +$("#clip-q").value * 1e6 }); }
+    catch (e) { note.textContent = "Recording couldn't start in this browser."; return; }
+    const chunks = [];
+    mr.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    mr.onstop = () => {
+      clearInterval(rec.timer); rec = null; stream.getTracks().forEach((t) => t.stop());
+      btn.classList.remove("recording"); btn.textContent = "Record clip";
+      const blob = new Blob(chunks, { type: (type || "video/webm").split(";")[0] });
+      note.textContent = `Clip ready (${(blob.size / 1e6).toFixed(1)} MB).`;
+      download(fileBase() + "-" + secs + "s." + ext, blob);
+    };
+    const t0 = performance.now();
+    rec = { mr, timer: setInterval(() => {
+      const left = Math.max(0, secs - (performance.now() - t0) / 1000);
+      btn.textContent = `Recording… ${Math.ceil(left)} s (click to stop)`;
+      if (left <= 0) stopClip();
+    }, 200) };
+    btn.classList.add("recording"); btn.textContent = `Recording… ${secs} s (click to stop)`;
+    note.textContent = "Recording the canvas. Keep this tab open and visible.";
+    mr.start(500);
+  }
+  function stopClip() { if (rec && rec.mr.state !== "inactive") rec.mr.stop(); }
   function exportSVG() {
     if (!engine) return;
     const rec = svgRecorder(env.W, env.H);
