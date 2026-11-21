@@ -20,6 +20,8 @@ Threads turn in smooth arcs (a correlated random walk, `js/hypha.js`), so they r
 
 Fonts: Google Fonts (incl. Roboto, Roboto Condensed, Roboto Mono), Satoshi from Fontshare, or upload your own.
 
+- **Text**: write a paragraph and it grows like mycelium. Every thread is a line of your text: it sprouts from the paragraph's edges (or one point, or your clicks), turns in gentle arcs, branches (the branch carries on with the next word), steers away from other text and stops when it runs into it. Letters get smaller (**Letters get smaller**) and further apart (**Letters spread apart**) as they grow; optional fading and visible threads. SVG export keeps the letters as real text.
+
 Every tab has **Variation between runs**: 0 keeps your settings exactly, higher values nudge them at random on every growth.
 Canvas: Fit screen, A4 portrait or landscape, or Square; ink on paper or light on dark; speed; pause. **Save PNG** (high resolution) and **Save SVG** (vector lines).
 **Record a clip**: 5, 10, 15 or 30 seconds of the live canvas as a video (MP4 where the browser supports it, otherwise WebM), starting from a new growth or from where it is now. The Speed setting turns it into a time-lapse.
@@ -37,6 +39,7 @@ Keys: Space pause · N new growth · H hide controls · R record a clip.
 | `js/forage.js` | Paths · Realistic (forage, then prune) |
 | `js/hypha.js` | How a tip turns (smooth arcs) |
 | `js/network.js` | Network |
+| `js/text.js` | Text |
 | `js/svg.js` | Records the drawing as SVG |
 | `lib/p5.min.js` | p5.js 1.9.4 |
 

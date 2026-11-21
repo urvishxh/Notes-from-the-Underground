@@ -97,6 +97,33 @@
       ],
       create: (env, S) => (S.growth === "planned" ? createPathsEngine(env, S) : createForageEngine(env, S)),
     },
+    text: {
+      name: "Text",
+      about: "Write a paragraph and it grows like mycelium: every thread is a line of your text, branching, turning and avoiding the rest, with letters getting smaller and further apart the further they grow. Click the canvas to plant more text.",
+      defaults: { text: "Beneath the forest floor a quiet network threads through the dark, joining root to root and tree to tree. It carries water, sugar, warnings and memory. Nothing here grows alone; everything that thrives is connected.", font: "IBM Plex Serif", fontWeight: 400, size: 18, measure: 0.4, start: "paragraph", sprouts: 16, branching: 0.45, wander: 0.35, shrink: 0.45, spread: 0.45, reach: 0.65, fade: false, threads: true, weight: 1, variation: 0.5 },
+      controls: [
+        { type: "button", label: "Grow again", cmd: "regrow", primary: true, hint: "Same settings, a new random growth" },
+        { type: "section", label: "Text" },
+        { type: "text", key: "text", label: "Your paragraph", rows: 5, regrow: true },
+        { type: "font", key: "font", label: "Font", regrow: true },
+        { type: "select", key: "fontWeight", label: "Font weight", options: [[300, "Light"], [400, "Regular"], [500, "Medium"], [700, "Bold"], [900, "Black"]], regrow: true },
+        { type: "range", key: "size", label: "Text size", min: 8, max: 48, step: 1, fmt: (v) => v + " px", regrow: true },
+        { type: "range", key: "measure", label: "Paragraph width", min: 0.15, max: 0.8, step: 0.01, fmt: pct, regrow: true, when: (S) => S.start === "paragraph" },
+        { type: "section", label: "Growth" },
+        { type: "select", key: "start", label: "Start from", options: [["paragraph", "The paragraph (it sprouts from its edges)"], ["point", "One point in the centre"], ["clicks", "Only where I click"]], regrow: true },
+        { type: "range", key: "sprouts", label: "Sprouts", min: 1, max: 40, step: 1, fmt: String, regrow: true, when: (S) => S.start !== "clicks" },
+        { type: "range", key: "branching", label: "Branching", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true },
+        { type: "range", key: "wander", label: "Wander", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true },
+        { type: "range", key: "shrink", label: "Letters get smaller", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true },
+        { type: "range", key: "spread", label: "Letters spread apart (tracking)", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true },
+        { type: "range", key: "reach", label: "Reach", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true },
+        { type: "range", key: "variation", label: "Variation between runs", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true },
+        { type: "toggle", key: "fade", label: "Fade with distance", regrow: true },
+        { type: "toggle", key: "threads", label: "Show the threads under the text" },
+        { type: "note", text: "Click the canvas to plant more text: five threads sprout from where you click." },
+      ],
+      create: (env, S) => createTextEngine(env, S),
+    },
   };
 
   // ---------- state ----------
@@ -131,9 +158,9 @@
   async function build() {
     const id = ++buildId, T = TABS[tab], S = settings[tab];
     env.store = stores[tab]; env.t = 0;
+    if (S.font) { try { await document.fonts.load(`${S.fontWeight} 100px "${S.font}"`); } catch (e) {} }
+    if (id !== buildId) return;
     if (tab === "type") {
-      try { await document.fonts.load(`${S.fontWeight} 100px "${S.font}"`); } catch (e) {}
-      if (id !== buildId) return;
       env.geo = buildGeometry({ W: env.W, H: env.H, text: S.text, family: S.font, weight: S.fontWeight, size: S.size, tracking: S.tracking || 0 });
     } else env.geo = null;
     engine = T.create(env, S);
@@ -225,8 +252,8 @@
       const lab = document.createElement("label"); lab.htmlFor = id; lab.textContent = c.label; f.appendChild(lab);
       const changed = () => { if (c.regrow) regrowSoon(); if (c.key === "text") writeHash(); if (c.type === "select") renderControls(); };
       if (c.type === "text") {
-        const t = document.createElement("textarea"); t.id = id; t.rows = 2; t.value = S[c.key]; t.spellcheck = false;
-        t.addEventListener("input", () => { S[c.key] = t.value.split("\n").slice(0, 4).join("\n"); changed(); });
+        const t = document.createElement("textarea"); t.id = id; t.rows = c.rows || 2; t.value = S[c.key]; t.spellcheck = false;
+        t.addEventListener("input", () => { S[c.key] = c.rows ? t.value : t.value.split("\n").slice(0, 4).join("\n"); changed(); });
         f.appendChild(t);
       } else if (c.type === "select" || c.type === "font") {
         const sel = document.createElement("select"); sel.id = id;
@@ -284,7 +311,7 @@
     const lab = document.createElement("label"); lab.htmlFor = id; lab.className = "btn upload"; lab.textContent = "Upload a font file (.ttf .otf .woff .woff2)";
     lab.tabIndex = 0; lab.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); inp.click(); } });
     const msg = document.createElement("p"); msg.className = "note"; msg.setAttribute("aria-live", "polite");
-    if (uploaded.has(settings.type[key])) msg.textContent = "Using your font: " + settings.type[key];
+    if (uploaded.has(settings[tab][key])) msg.textContent = "Using your font: " + settings[tab][key];
     const use = async (file) => {
       if (!file) return;
       if (!/\.(ttf|otf|woff2?)$/i.test(file.name)) { msg.textContent = "That isn't a font file. Use a .ttf, .otf, .woff or .woff2 file."; return; }
@@ -295,7 +322,7 @@
         const face = new FontFace(name, await file.arrayBuffer());
         await face.load(); document.fonts.add(face);
         uploaded.add(name); if (!FONTS.includes(name)) FONTS.unshift(name);
-        settings.type[key] = name; renderControls(); build();
+        settings[tab][key] = name; renderControls(); build();
       } catch (e) { msg.textContent = "That font file couldn't be read (" + file.name + "). Try another format: .ttf or .otf usually work best."; }
     };
     inp.addEventListener("change", () => { use(inp.files && inp.files[0]); inp.value = ""; });
