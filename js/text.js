@@ -8,6 +8,8 @@
 //   colony   the first word sits in the centre; text-threads radiate from it like a germinating spore,
 //            dense near the centre and airy at the edges
 //   mat      the whole page woven from fine threads of text, like a mycelial mat
+//   web      strands of text sweep along one slow, curving current; they split into thinner strands,
+//            run alongside each other and join back together, with webbing where they meet or part
 // Biology in the growth:
 //   tips keep their heading and turn in gentle arcs; branches split off behind the tip (the branch
 //   carries on with the next word, set smaller and lighter than its parent); tips steer away from text
@@ -22,7 +24,8 @@ function createTextEngine(env, S) {
   const wcache = new Map();
   const adv = (ch, size, wt) => { const k = ch + wt; let w = wcache.get(k); if (w === undefined) { mc.font = `${wt} 100px "${family}", serif`; w = mc.measureText(ch).width / 100; wcache.set(k, w); } return w * size; };
   const lighter = (gen) => (gen === 0 ? W0 : Math.max(300, W0 - 200 * Math.min(2, gen)));
-  let R, glyphs, threads, knots, tips, hash, tipSeq;
+  let R, glyphs, threads, knots, tips, hash, tipSeq, webs, byId;
+  const WEB = style === "web";
 
   function recipe() {
     const v = S.variation ?? 0.5, j = (x, s = 0.25) => clamp(x + (Math.random() * 2 - 1) * s * v);
@@ -31,6 +34,8 @@ function createTextEngine(env, S) {
       shrink: 0.006 + 0.06 * j(S.shrink ?? 0.55), spread: 0.004 + 0.05 * j(S.spread ?? 0.5),
       reach: Math.max(env.W, env.H) * (0.25 + 0.95 * j(S.reach ?? 0.7)), hold: 4 + Math.round(14 * Math.random()),
       bare: 30 + 120 * Math.random(),
+      // web: one slow current that every strand follows (bend = how much it curves), and how readily strands rejoin
+      dir: -0.7 + (Math.random() * 2 - 1) * 0.25, bend: 0.4 + 1.2 * j(S.curve ?? 0.6), fs: 0.0012 + 0.0022 * Math.random(), join: j(S.join ?? 0.6),
     };
     const w = [r.wander > 0.14 ? "meandering" : r.wander < 0.06 ? "straight" : "curving", r.branch > 0.045 ? "bushy" : r.branch < 0.02 ? "sparse" : "branching",
       r.shrink > 0.045 ? "vanishing" : "lingering", r.spread > 0.035 ? "loosening" : "tight"];
@@ -45,9 +50,9 @@ function createTextEngine(env, S) {
   }
   const nextWord = (i) => { let k = i % text.length, n = 0; while (text[k] !== " " && n++ < text.length) k = (k + 1) % text.length; return (k + 1) % text.length; };
   function sprout(x, y, ang, i, size, o = {}) {
-    const th = { pts: [[x, y]], w: o.bare ? 0.5 : Math.max(0.4, size / 30) }; threads.push(th);
+    const th = { pts: [[x, y, o.bare ? 0 : size]], w: o.bare ? 0.5 : Math.max(0.4, size / 30) }; threads.push(th);
     const t = { x, y, ang, i: ((i % text.length) + text.length) % text.length, size, em: o.em || 0, d: 0, gen: o.gen || 0, carry: 0, id: tipSeq++, th, turn: 0, bare: !!o.bare, bareLeft: o.bareLeft || R.bare, hold: o.hold ?? R.hold };
-    t.count = 0; tips.push(t); return t;
+    t.count = 0; byId.set(t.id, t); tips.push(t); return t;
   }
   // set a block of text (glyphs stay in place); returns line info
   function setBlock(x0, yMid, width, size, align) {
@@ -70,8 +75,11 @@ function createTextEngine(env, S) {
     return out;
   }
 
+  const flowAt = (x, y) => R.dir + (p.noise(x * R.fs + 11, y * R.fs + 7) - 0.5) * 2 * R.bend;
+  const turnTo = (a, b, k) => { let d = b - a; d = Math.atan2(Math.sin(d), Math.cos(d)); return a + d * k; };
   function setup() {
-    R = recipe(); glyphs = []; threads = []; knots = []; tips = []; hash = new Map(); tipSeq = 0;
+    R = recipe(); glyphs = []; threads = []; knots = []; tips = []; hash = new Map(); tipSeq = 0; webs = []; byId = new Map();
+    p.noiseSeed((Math.random() * 1e9) | 0);
     const n = Math.round(S.sprouts ?? 16);
     if (style === "unravel") {
       // a big paragraph on the left; every line carries on past its end and unravels
@@ -92,6 +100,13 @@ function createTextEngine(env, S) {
       for (let k = 0; k < m; k++) {
         const a = (k / m) * 6.283 + p.random(-0.1, 0.1);
         sprout(env.W / 2 + Math.cos(a) * rx, env.H / 2 + Math.sin(a) * ry, a + p.random(-0.15, 0.15), word.length + 1 + k * 7, s0 * p.random(0.7, 1), { hold: 2 + Math.round(Math.random() * 4) });
+      }
+    } else if (WEB) {
+      // a few thick strands enter from the bottom-left and sweep across with the current
+      const m = Math.max(3, Math.round(n / 2));
+      for (let k = 0; k < m; k++) {
+        const u = (k + 0.5) / m, x = u < 0.5 ? env.W * 0.03 : env.W * (0.03 + (u - 0.5) * 0.9), y = u < 0.5 ? env.H * (0.45 + u * 1.0) : env.H * 0.97;
+        sprout(x, y, flowAt(x, y), (k * 53) % text.length, s0 * p.random(0.8, 1.15), { hold: 3 });
       }
     } else {
       // mat: fine threads of text started all over the page
@@ -116,12 +131,12 @@ function createTextEngine(env, S) {
         if (tp.bare) {
           // the text has dissolved: a bare hypha keeps growing, branching more, until it runs out
           if (tp.carry < 2.5) break; tp.carry -= 2.5;
-          tp.ang = turnAway(tp, tp.ang + hyphaTurn(tp, R.wander * 1.6), 10);
+          tp.ang = WEB ? turnTo(tp.ang + hyphaTurn(tp, R.wander * 0.6), flowAt(tp.x, tp.y), 0.08) : turnAway(tp, tp.ang + hyphaTurn(tp, R.wander * 1.6), 10);
           tp.x += Math.cos(tp.ang) * 2.5; tp.y += Math.sin(tp.ang) * 2.5; tp.bareLeft -= 2.5;
-          tp.th.pts.push([tp.x, tp.y]);
+          tp.th.pts.push([tp.x, tp.y, 0]);
           if (tp.bareLeft <= 0 || tp.x < 2 || tp.y < 2 || tp.x > env.W - 2 || tp.y > env.H - 2) { keep = false; break; }
           if (tips.length + born.length < 500 && Math.random() < 0.035) {
-            const c = sprout(tp.x, tp.y, tp.ang + (Math.random() < 0.5 ? -1 : 1) * p.random(0.4, 0.9), 0, 0, { bare: true, bareLeft: tp.bareLeft * 0.6 });
+            const c = sprout(tp.x, tp.y, tp.ang + (Math.random() < 0.5 ? -1 : 1) * (WEB ? p.random(0.1, 0.3) : p.random(0.4, 0.9)), 0, 0, { bare: true, bareLeft: tp.bareLeft * 0.6 });
             tips.pop(); born.push(c);
           }
           continue;
@@ -131,21 +146,50 @@ function createTextEngine(env, S) {
         tp.carry -= w;
         // turning is per distance travelled (so big and small letters curve alike); calmer while it holds its size
         const k = Math.min(1.6, w / 12) * (tp.hold > 0 ? 0.3 : 1);
-        const a0 = tp.ang + hyphaTurn(tp, R.wander * k);
-        const a = (tp.ang = tp.hold > 0 ? a0 * 0.7 + turnAway(tp, a0, tp.size * 2.5) * 0.3 : turnAway(tp, a0, tp.size * 2.5));
+        const a0 = tp.ang + hyphaTurn(tp, R.wander * k * (WEB ? 0.4 : 1));
+        let a;
+        if (WEB) {
+          // follow the current; drift toward a nearby strand and join it (anastomosis), with webbing where they meet
+          a = turnTo(a0, flowAt(tp.x, tp.y), 0.07 * Math.min(1.6, w / 12));
+          const m = Math.min(env.W, env.H) * 0.09;   // near the edge a strand bends along it instead of running off
+          if (tp.x < m || tp.y < m || tp.x > env.W - m || tp.y > env.H - m) a = turnTo(a, Math.atan2(env.H / 2 - tp.y, env.W / 2 - tp.x), 0.12);
+          let best = null, bd = tp.size * 2.2;
+          if (tp.count > 6 && ch !== " ") near(tp.x, tp.y, bd, (g) => {
+            if (g.own < 0 || g.own === tp.id || g.own === tp.parent || (byId.get(g.own) || {}).parent === tp.id) return;
+            const d = Math.hypot(g.x - tp.x, g.y - tp.y); if (d < bd) { bd = d; best = g; }
+          });
+          if (best && Math.random() < R.join) {
+            if (bd < Math.max(tp.size, best.s) * 0.75) {
+              const pts = tp.th.pts, T3 = pts[Math.max(0, pts.length - 6)], T = pts[pts.length - 1];
+              webs.push({ kind: "join", T3, T, G: [best.x, best.y], s: tp.size });
+              tp.th.pts.push([best.x, best.y, Math.min(tp.size, best.s)]);
+              keep = false; break;
+            }
+            a = turnTo(a, Math.atan2(best.y - tp.y, best.x - tp.x), 0.18);
+          }
+        } else a = tp.hold > 0 ? a0 * 0.7 + turnAway(tp, a0, tp.size * 2.5) * 0.3 : turnAway(tp, a0, tp.size * 2.5);
+        tp.ang = a;
         let hit = false;   // ran into text (another thread's, or its own from further back)
-        if (ch !== " " && tp.count > 3) near(tp.x, tp.y, tp.size, (g) => { if (!hit && (g.own !== tp.id || tp.count - g.k > 10) && Math.hypot(g.x - tp.x, g.y - tp.y) < Math.max(tp.size, g.s) * 0.6) hit = true; });
+        if (ch !== " " && tp.count > 3) near(tp.x, tp.y, tp.size, (g) => { if (!hit && !(WEB && (g.own === tp.parent || (byId.get(g.own) || {}).parent === tp.id)) && (g.own !== tp.id || tp.count - g.k > 10) && Math.hypot(g.x - tp.x, g.y - tp.y) < Math.max(tp.size, g.s) * 0.6) hit = true; });
         if (hit || tp.d > R.reach || tp.x < 2 || tp.y < 2 || tp.x > env.W - 2 || tp.y > env.H - 2 || glyphs.length > 16000) { keep = false; break; }
         if (ch !== " ") addGlyph({ ch, x: tp.x, y: tp.y, a, s: tp.size, wt, alpha: S.fade ? Math.max(0.2, 1 - tp.d / R.reach) : 1, own: tp.id, k: tp.count++ });
         tp.x += Math.cos(a) * w; tp.y += Math.sin(a) * w; tp.d += w;
-        tp.th.pts.push([tp.x, tp.y]);
+        tp.th.pts.push([tp.x, tp.y, tp.size]);
         tp.i = (tp.i + 1) % text.length;
         // after holding its size for a few words, the thread shrinks and loosens
         if (tp.hold > 0) { if (ch === " ") tp.hold--; }
-        else { tp.size *= 1 - R.shrink * (tp.gen ? 0.7 : 0.45); tp.em += R.spread * 0.4; }
-        if (tp.size < 3) { tp.bare = true; tp.th = { pts: [[tp.x, tp.y]], w: 0.5 }; threads.push(tp.th); continue; }
+        else { tp.size *= 1 - R.shrink * (WEB ? 0.18 : tp.gen ? 0.7 : 0.45); tp.em += R.spread * (WEB ? 0.15 : 0.4); }
+        if (tp.size < 3) { tp.bare = true; tp.th = { pts: [[tp.x, tp.y, 0]], w: 0.5 }; threads.push(tp.th); continue; }
         // branch: the new thread carries on with the next word, smaller and lighter
-        if (tips.length + born.length < 500 && ch === " " && Math.random() < R.branch * 4) {
+        if (WEB && tips.length + born.length < 500 && ch === " " && tp.count > 4 && Math.random() < R.branch * 4) {
+          // the two strands part: the branch steps sideways and away, the parent leans the other way
+          const sg = Math.random() < 0.5 ? -1 : 1, off = tp.size * 0.9, nx = -Math.sin(tp.ang) * sg, ny = Math.cos(tp.ang) * sg;
+          const c = sprout(tp.x + nx * off, tp.y + ny * off, tp.ang + sg * p.random(0.22, 0.45), nextWord(tp.i), tp.size * p.random(0.62, 0.8), { em: tp.em, gen: tp.gen + 1, hold: 0 });
+          c.th.pts.unshift([tp.x, tp.y, c.size]);
+          tips.pop(); c.d = tp.d; c.parent = tp.id; born.push(c);
+          tp.ang -= sg * 0.12; tp.size *= 0.86;   // a strand that splits gets thinner
+          webs.push({ kind: "split", P: tp.th, pi: tp.th.pts.length - 1, C: c.th, s: tp.size });
+        } else if (!WEB && tips.length + born.length < 500 && ch === " " && Math.random() < R.branch * 4) {
           const c = sprout(tp.x, tp.y, tp.ang + (Math.random() < 0.5 ? -1 : 1) * p.random(0.3, 0.8), nextWord(tp.i), tp.size * p.random(0.55, 0.75), { em: tp.em, gen: tp.gen + 1, hold: 1 });
           tips.pop(); c.d = tp.d; born.push(c);
           knots.push({ x: tp.x, y: tp.y, r: Math.max(1, tp.size * 0.14) });
@@ -166,11 +210,36 @@ function createTextEngine(env, S) {
       ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = ink; ctx.fillStyle = ink;
       // the hyphae: thin threads under the text, and bare threads where the text has dissolved
       const showTh = S.threads ?? true;
+      // threads taper with the text they carry (thick under big letters, hair-fine at the end)
+      const wt = S.weight ?? 1, buckets = new Map();
       for (const th of threads) {
         if (th.pts.length < 2 || (!showTh && th.w > 0.5)) continue;
-        ctx.globalAlpha = th.w > 0.5 ? 0.45 : 0.8;
-        ctx.beginPath(); ctx.moveTo(th.pts[0][0], th.pts[0][1]); for (let i = 1; i < th.pts.length; i++) ctx.lineTo(th.pts[i][0], th.pts[i][1]);
-        ctx.lineWidth = th.w * (S.weight ?? 1); ctx.stroke();
+        for (let i = 1; i < th.pts.length; i++) {
+          const sz = th.pts[i][2] || 0, w = Math.round((sz ? Math.max(0.5, sz * (WEB ? 0.07 : 0.05)) : 0.5) * wt * 4) / 4;
+          let b = buckets.get(w); if (!b) buckets.set(w, (b = [])); b.push(th.pts[i - 1], th.pts[i]);
+        }
+      }
+      for (const [w, segs] of buckets) {
+        ctx.globalAlpha = w <= 0.5 * wt ? 0.75 : WEB ? 0.5 : 0.45;
+        ctx.beginPath(); for (let i = 0; i < segs.length; i += 2) { ctx.moveTo(segs[i][0], segs[i][1]); ctx.lineTo(segs[i + 1][0], segs[i + 1][1]); }
+        ctx.lineWidth = w; ctx.stroke();
+      }
+      // webbing: a curved membrane fills the corner where strands part or join
+      if (WEB) {
+        ctx.globalAlpha = 0.55;
+        for (const m of webs) {
+          ctx.beginPath();
+          if (m.kind === "split") {
+            const P = m.P.pts[m.pi], A = m.P.pts[Math.min(m.P.pts.length - 1, m.pi + 5)], B = m.C.pts[Math.min(m.C.pts.length - 1, 5)];
+            if (!P || !A || !B) continue;
+            const cx = P[0] + ((A[0] + B[0]) / 2 - P[0]) * 0.3, cy = P[1] + ((A[1] + B[1]) / 2 - P[1]) * 0.3;
+            ctx.moveTo(P[0], P[1]); ctx.lineTo(A[0], A[1]); ctx.quadraticCurveTo(cx, cy, B[0], B[1]); ctx.closePath();
+          } else {
+            const { T3, T, G } = m, cx = T[0] + ((T3[0] + G[0]) / 2 - T[0]) * 0.45, cy = T[1] + ((T3[1] + G[1]) / 2 - T[1]) * 0.45;
+            ctx.moveTo(T3[0], T3[1]); ctx.lineTo(T[0], T[1]); ctx.lineTo(G[0], G[1]); ctx.quadraticCurveTo(cx, cy, T3[0], T3[1]); ctx.closePath();
+          }
+          ctx.fill();
+        }
       }
       ctx.globalAlpha = 1;
       for (const k of knots) { ctx.beginPath(); ctx.arc(k.x, k.y, k.r, 0, 6.283); ctx.fill(); }

@@ -13,6 +13,7 @@ function svgRecorder(W, H) {
     moveTo(x, y) { d += `M${r2(x)} ${r2(y)}`; },
     lineTo(x, y) { d += `L${r2(x)} ${r2(y)}`; },
     closePath() { d += "Z"; },
+    quadraticCurveTo(cx, cy, x, y) { d += `Q${r2(cx)} ${r2(cy)} ${r2(x)} ${r2(y)}`; },
     arc(x, y, r) {   // the modes only draw full circles
       r = r2(r);
       d += `M${r2(x + r)} ${r2(y)}A${r} ${r} 0 1 0 ${r2(x - r)} ${r2(y)}A${r} ${r} 0 1 0 ${r2(x + r)} ${r2(y)}`;

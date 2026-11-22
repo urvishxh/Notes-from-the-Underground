@@ -100,7 +100,7 @@
     text: {
       name: "Text",
       about: "Write a paragraph and it grows like mycelium: every thread is a line of your text. Branches are set smaller and lighter, letters shrink and spread apart as they grow, and finally dissolve into bare threads. Click the canvas to plant more text.",
-      defaults: { text: "Beneath the forest floor a quiet network threads through the dark, joining root to root and tree to tree. It carries water, sugar, warnings and memory. Nothing here grows alone; everything that thrives is connected.", font: "Fraunces", fontWeight: 600, size: 30, measure: 0.4, style: "unravel", sprouts: 16, branching: 0.5, wander: 0.35, shrink: 0.55, spread: 0.5, reach: 0.7, fade: false, threads: true, weight: 1, variation: 0.5 },
+      defaults: { text: "Beneath the forest floor a quiet network threads through the dark, joining root to root and tree to tree. It carries water, sugar, warnings and memory. Nothing here grows alone; everything that thrives is connected.", font: "Fraunces", fontWeight: 600, size: 30, measure: 0.4, style: "web", curve: 0.6, join: 0.6, sprouts: 16, branching: 0.5, wander: 0.35, shrink: 0.55, spread: 0.5, reach: 0.7, fade: false, threads: true, weight: 1, variation: 0.5 },
       controls: [
         { type: "button", label: "Grow again", cmd: "regrow", primary: true, hint: "Same settings, a new random growth" },
         { type: "section", label: "Text" },
@@ -109,9 +109,11 @@
         { type: "select", key: "fontWeight", label: "Font weight", options: [[300, "Light"], [400, "Regular"], [500, "Medium"], [700, "Bold"], [900, "Black"]], regrow: true },
         { type: "range", key: "size", label: "Text size", min: 10, max: 72, step: 1, fmt: (v) => v + " px", regrow: true },
         { type: "section", label: "Composition" },
-        { type: "select", key: "style", label: "Style", options: [["unravel", "Unravel: the paragraph's lines grow on and fray"], ["colony", "Colony: threads radiate from the first word"], ["mat", "Mat: the page woven from fine text"]], regrow: true },
+        { type: "select", key: "style", label: "Style", options: [["web", "Web: strands sweep, split and rejoin"], ["unravel", "Unravel: the paragraph's lines grow on and fray"], ["colony", "Colony: threads radiate from the first word"], ["mat", "Mat: the page woven from fine text"]], regrow: true },
         { type: "range", key: "measure", label: "Paragraph width", min: 0.15, max: 0.7, step: 0.01, fmt: pct, regrow: true, when: (S) => S.style === "unravel" },
         { type: "range", key: "sprouts", label: "Sprouts", min: 1, max: 40, step: 1, fmt: String, regrow: true },
+        { type: "range", key: "curve", label: "Curviness of the current", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true, when: (S) => S.style === "web" },
+        { type: "range", key: "join", label: "Strands rejoin", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true, when: (S) => S.style === "web" },
         { type: "section", label: "Growth" },
         { type: "range", key: "branching", label: "Branching", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true },
         { type: "range", key: "wander", label: "Wander", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true },
