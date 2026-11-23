@@ -6,7 +6,8 @@ Plain HTML + JavaScript, no build step. p5.js 1.9.4 (instance mode) runs the can
 ## Tabs
 
 - **Type**: type a word (up to 4 lines), pick a font or upload your own.
-  - *Emerge* (default): the word writes itself (threads sprout inside each letter, left to right), then threads burst from every letter's edge and overtake the page in seconds; the word eases back to a faint presence in the web (**Word in the web**), and the web stays alive: signals stream through it toward the word (**Signals through the web**), hovering sends a wave, clicking sends a burst. Grown threads are kept on cached layers so it stays smooth.
+  - *Hair* (default): letters made of thousands of fine, translucent hyphae (a felt that turns cottony where hairs overlap, with a few heavier cords through each stroke). At a few spots on the outline the hyphae cluster into dense, bright knots, and fans spray out of them, splitting into ever finer, fainter hairs, so it thins out with distance; faint loose threads tangle across the page. **Knots and fans**, **How far they reach**, **Loose threads on the page**, **Density**, **Curviness**. Click to plant a tuft.
+  - *Emerge*: the word writes itself (threads sprout inside each letter, left to right), then threads burst from every letter's edge and overtake the page in seconds; the word eases back to a faint presence in the web (**Word in the web**), and the web stays alive: signals stream through it toward the word (**Signals through the web**), hovering sends a wave, clicking sends a burst. Grown threads are kept on cached layers so it stays smooth.
   - *Woven*: a lab culture fills each letter. **Spill** lets threads cross the outline (0 = bound); counters can be kept open so the word reads. The culture keeps finding unreached parts of the letters and grows into them, so no gaps are left. **Drag on the canvas** to paint fresh ground: the network grows into it from its nearest threads. **Fill gaps now** forces a pass.
   - *Outgrowth*: the letters are packed dark with mycelium and threads grow out of their edges, thinning and spreading as they go. **How far it grows out** and **Thinning** shape the halo.
     **Letters reach for each other** sends cords between neighbouring letters from their closest edges: where they arrive, the route thickens into a cord and pulses cross it. **Letter spacing** gives the connections room.
@@ -37,6 +38,7 @@ Keys: Space pause · N new growth · H hide controls · R record a clip.
 | `index.html` | Page layout and styles |
 | `js/app.js` | Tabs, controls (their settings live in the `TABS` object), canvas loop, export |
 | `js/geometry.js` | Turns the word and font into the shape the mycelium grows in |
+| `js/hair.js` | Type · Hair |
 | `js/emerge.js` | Type · Emerge |
 | `js/overtake.js` | Type · Overtake |
 | `js/woven.js` | Type · Woven and Outgrowth |
