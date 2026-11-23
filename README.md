@@ -9,6 +9,7 @@ Plain HTML + JavaScript, no build step. p5.js 1.9.4 (instance mode) runs the can
   - *Woven*: a lab culture fills each letter. **Spill** lets threads cross the outline (0 = bound); counters can be kept open so the word reads. The culture keeps finding unreached parts of the letters and grows into them, so no gaps are left. **Drag on the canvas** to paint fresh ground: the network grows into it from its nearest threads. **Fill gaps now** forces a pass.
   - *Outgrowth*: the letters are packed dark with mycelium and threads grow out of their edges, thinning and spreading as they go. **How far it grows out** and **Thinning** shape the halo.
     **Letters reach for each other** sends cords between neighbouring letters from their closest edges: where they arrive, the route thickens into a cord and pulses cross it. **Letter spacing** gives the connections room.
+  - *Overtake*: spores land all over the page; the letters are food, so threads find the word, pack it dense and dark, then spread until the page is covered in finer threads. **Hunger for the word**, **Overtake the page**, **Word contrast** (heavy threads in the letters, fine ones on the page) and **Letter swell** (letters grow fatter and softer) shape it. Click or drag to drop spores.
   - *Roped*: food is placed along the centre line of every stroke and joined by twisted cords.
 - **Network**: a fungus on a blank page. Start from scattered spores or one colony in the centre (like a petri dish). Spores, food, reach, density, branching, wander, cords, die-back. **New network** gives a new random result. Click to drop food; hover to send a signal.
 - **Paths**: click to place food sources, then **Connect**.
@@ -34,6 +35,7 @@ Keys: Space pause · N new growth · H hide controls · R record a clip.
 | `index.html` | Page layout and styles |
 | `js/app.js` | Tabs, controls (their settings live in the `TABS` object), canvas loop, export |
 | `js/geometry.js` | Turns the word and font into the shape the mycelium grows in |
+| `js/overtake.js` | Type · Overtake |
 | `js/woven.js` | Type · Woven and Outgrowth |
 | `js/paths.js` | Paths · Planned, and Type · Roped |
 | `js/forage.js` | Paths · Realistic (forage, then prune) |
