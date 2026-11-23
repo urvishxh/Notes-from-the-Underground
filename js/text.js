@@ -209,7 +209,7 @@ function createTextEngine(env, S) {
     render(ctx, screen, ink) {
       ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = ink; ctx.fillStyle = ink;
       // the hyphae: thin threads under the text, and bare threads where the text has dissolved
-      const showTh = S.threads ?? true;
+      const showTh = (S.threads ?? true) && style !== "unravel";   // Unravel: the text runs on with no line under it
       // threads taper with the text they carry (thick under big letters, hair-fine at the end)
       const wt = S.weight ?? 1, buckets = new Map();
       for (const th of threads) {

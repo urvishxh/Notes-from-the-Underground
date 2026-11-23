@@ -122,7 +122,7 @@
         { type: "range", key: "reach", label: "Reach", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true },
         { type: "range", key: "variation", label: "Variation between runs", min: 0, max: 1, step: 0.01, fmt: pct, regrow: true },
         { type: "toggle", key: "fade", label: "Fade with distance", regrow: true },
-        { type: "toggle", key: "threads", label: "Show the threads under the text" },
+        { type: "toggle", key: "threads", label: "Show the threads under the text", when: (S) => S.style !== "unravel" },
         { type: "note", text: "Click the canvas to plant more text: six threads sprout from where you click. When letters get too small to read, the thread carries on as a bare hypha." },
       ],
       create: (env, S) => createTextEngine(env, S),
